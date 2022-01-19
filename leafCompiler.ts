@@ -1,4 +1,4 @@
-import { walkSync } from "https://deno.land/std@0.85.0/fs/mod.ts";
+import { walkSync } from 'https://deno.land/std@0.85.0/fs/mod.ts';
 
 type FileStorageNumbers = { [path: string]: Array<number> };
 type FileStorageTypedArray = { [path: string]: Uint8Array };
@@ -8,7 +8,8 @@ const getFilename = (fullPath: string) => fullPath.replace(/^.*[\\\/]/, '');
 const fileSystemPropertyName: string = "MANDARINE_FILE_SYSTEM";
 const encoder = new TextEncoder();
 const decoderUtf8 = new TextDecoder('utf-8');
-const isExecutable: boolean = (Deno.mainModule == "file://$deno$/bundle.js");
+const isExecutable: boolean = Deno.mainModule == 'file://$deno$/bundle.js';
+// console.log(`Deno Main Module: ${Deno.mainModule}`, isExecutable);
 
 const fileExists = (path: string | URL): boolean => {
     try {
@@ -23,26 +24,27 @@ const getFilePath = (path: string | URL): string => path instanceof URL ? path.t
 
 const getFileDirectory = (filePath: string) => {
     if (filePath.indexOf("/") == -1) { // windows
-      return filePath.substring(0, filePath.lastIndexOf('\\'));
-    } 
+        return filePath.substring(0, filePath.lastIndexOf('\\'));
+    }
     else { // unix
-      return filePath.substring(0, filePath.lastIndexOf('/'));
+        return filePath.substring(0, filePath.lastIndexOf('/'));
     }
 }
 
 const guidGenerator = () => {
-    let S4 = function() {
-       return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+    let S4 = function () {
+        return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
     };
     return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
 }
 
 export type CompileOptions = {
-    modulePath: string,
-    contentFolders: Array<string>
-    flags?: Array<string>
+    modulePath: string;
+    contentFolders: Array<string>;
+    flags?: Array<string>;
     output?: string;
-}
+    args?: Array<string>;
+};
 
 export class Leaf {
 
@@ -58,7 +60,7 @@ export class Leaf {
         this.initialize();
 
         // We don't use in-memory while it's not an executable
-        if(!isExecutable) return Deno.readFileSync(path);
+        // if (!isExecutable) return Deno.readFileSync(path);
 
         let filePath = getFilePath(path);
 
@@ -66,9 +68,12 @@ export class Leaf {
 
         const fileInMemory = this.files[filePath] || (this.files[`./${filePath}`] || this.files[filePath.replace("./", "")]);
 
-        if(!fileInMemory) {
+        // console.log('Files in memory: ' + Object.keys(this.files).join(', '));
+
+        if (!fileInMemory) {
             // Logic for the compiler
-            if(fileExists(filePath)) {
+            if (fileExists(filePath)) {
+                // console.log(`Reading local file: ${filePath}`);
                 const fileContent = Deno.readFileSync(filePath);
                 this.files[filePath] = fileContent;
                 return fileContent;
@@ -76,16 +81,17 @@ export class Leaf {
                 throw new Error(`File not found (${filePath}).`);
             }
         } else {
+            // console.log(`Reading file from memory: ${filePath}`);
             return fileInMemory;
         }
     }
 
     private static initialize() {
-        if(isExecutable && !this.configuration.initialized) {
+        if (isExecutable && !this.configuration.initialized) {
             //@ts-ignore
             const files = window[fileSystemPropertyName];
 
-            if(files) {
+            if (files) {
                 // @ts-ignore
                 this.files = Object.fromEntries(Object.entries(files).map(([filePath, content]) => [filePath, new Uint8Array(content)]));
             }
@@ -97,9 +103,9 @@ export class Leaf {
     }
 
     public static async compile(options: CompileOptions) {
-        if(isExecutable) {
+        if (isExecutable) {
             return;
-        };
+        }
 
         options.contentFolders.forEach((folder) => {
             for (const entry of Array.from(walkSync(folder)).filter((item) => item.isFile)) {
@@ -114,27 +120,43 @@ export class Leaf {
         const fakeFileSystemString = `\n \n window["${fileSystemPropertyName}"] = ${this.storageToJson()}; \n \n`;
         Deno.writeFileSync(tempFilePath, encoder.encode(fakeFileSystemString), { append: true });
 
-        const bundleCode = (await Deno.emit(moduleToUse, { bundle: "module" })).files["deno:///bundle.js"];
+        const bundleCode = (
+            await Deno.emit(moduleToUse, {
+                bundle: 'module',
+                compilerOptions: { emitDecoratorMetadata: true, inlineSourceMap: true, inlineSources: true }
+            })
+        ).files['deno:///bundle.js'];
         Deno.writeFileSync(tempFilePath, encoder.encode(bundleCode), { append: true });
 
         let cmd = ["deno", "compile"];
 
-        if(options && options.flags) {
-            if(options.flags.indexOf("--output") >= 0) throw new Error("'--output' flag is not valid in the current context. Use the property 'output' instead.");
-            if(options.flags.indexOf("--unstable")) options.flags = options.flags.filter((item) => item.toLowerCase() != "--unstable");
-            if(options.flags.indexOf("--allow-read")) options.flags = options.flags.filter((item) => item.toLowerCase() != "--allow-read");
+        if (options && options.flags) {
+            if (options.flags.indexOf('--output') !== -1)
+                throw new Error("'--output' flag is not valid in the current context. Use the property 'output' instead.");
+            if (options.flags.indexOf('--unstable') !== -1)
+                options.flags = options.flags.filter((item) => item.toLowerCase() != '--unstable');
+            if (options.flags.indexOf('--allow-read') !== -1)
+                options.flags = options.flags.filter((item) => item.toLowerCase() != '--allow-read');
             cmd = [...cmd, ...options.flags];
         }
 
         const outputFilename = (options?.output) ? options?.output : originalFileName;
 
-        cmd = [...cmd, "--unstable", "--allow-read", "--output", outputFilename, tempFilePath.toString()];
+        const args = options?.args || [];
 
-        await Deno.run({
-            cmd: cmd
-        }).status();
+        cmd = [...cmd, '--unstable', '--allow-read', '--output', outputFilename, tempFilePath.toString(), ...args];
 
-        Deno.remove(tempFilePath);
+        try {
+            const process = Deno.run({
+                cmd: cmd
+            })
+            const status = await process.status();
+            console.log(`Compilation results: ${status.success}`);
+        } catch (error) {
+            error;
+        }
+
+        Deno.removeSync(tempFilePath);
     }
 
     public static readFileSync(path: string | URL): Uint8Array {
