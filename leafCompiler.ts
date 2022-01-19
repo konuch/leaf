@@ -44,7 +44,8 @@ export type CompileOptions = {
     flags?: Array<string>;
     output?: string;
     args?: Array<string>;
-};
+    compilerOptions?: Deno.CompilerOptions;
+}
 
 export class Leaf {
 
@@ -120,10 +121,12 @@ export class Leaf {
         const fakeFileSystemString = `\n \n window["${fileSystemPropertyName}"] = ${this.storageToJson()}; \n \n`;
         Deno.writeFileSync(tempFilePath, encoder.encode(fakeFileSystemString), { append: true });
 
+        const compilerOptions = options.compilerOptions ? options.compilerOptions : undefined;
+
         const bundleCode = (
             await Deno.emit(moduleToUse, {
                 bundle: 'module',
-                compilerOptions: { emitDecoratorMetadata: true, inlineSourceMap: true, inlineSources: true }
+                compilerOptions
             })
         ).files['deno:///bundle.js'];
         Deno.writeFileSync(tempFilePath, encoder.encode(bundleCode), { append: true });
