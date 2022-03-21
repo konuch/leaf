@@ -8,8 +8,22 @@ const getFilename = (fullPath: string) => fullPath.replace(/^.*[\\\/]/, '');
 const fileSystemPropertyName: string = "MANDARINE_FILE_SYSTEM";
 const encoder = new TextEncoder();
 const decoderUtf8 = new TextDecoder('utf-8');
-const isExecutable: boolean = Deno.mainModule == 'file://$deno$/bundle.js';
-// console.log(`Deno Main Module: ${Deno.mainModule}`, isExecutable);
+
+const isExecutableFn = () => {
+    let result;
+
+    if (Deno.version.deno === '1.13.2') {
+        result = Deno.mainModule == 'file://$deno$/bundle.js';
+    } else {
+        result = Deno.mainModule.indexOf('leaf_') !== -1;
+    }
+
+    return result;
+}
+
+console.log(`Deno version: ${Deno.version.deno}`)
+const isExecutable: boolean = isExecutableFn();
+console.log(`Deno Main Module: ${Deno.mainModule}`, `Is executable: ${isExecutable}`);
 
 const fileExists = (path: string | URL): boolean => {
     try {
