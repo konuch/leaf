@@ -130,7 +130,7 @@ export class Leaf {
 
         const moduleToUse = options.modulePath;
         const [originalFileName] = getFilename(moduleToUse).split(".");
-        const tempFilePath = Deno.makeTempFileSync({ prefix: "leaf_" });
+        const tempFilePath = Deno.makeTempFileSync({ prefix: "leaf_", suffix: '.js' });
 
         const fakeFileSystemString = `\n \n window["${fileSystemPropertyName}"] = ${this.storageToJson()}; \n \n`;
         Deno.writeFileSync(tempFilePath, encoder.encode(fakeFileSystemString), { append: true });
